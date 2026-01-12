@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart'; // PASTIKAN INI ADA
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shopping_list_asses2/main.dart'; // PERBAIKI IMPORT PATH
 
