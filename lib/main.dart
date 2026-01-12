@@ -1,121 +1,378 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ ADD THIS
 
-void main() {
+import 'pages/login_screen.dart';
+import 'pages/home_screen.dart';
+import 'pages/profile_screen.dart';
+import 'providers/theme_provider.dart';
+import 'providers/location_provider.dart';
+import 'services/supabase_service.dart'; // ✅ CHANGE THIS
+
+void main() async {
+  // ✅ PASTIKAN WIDGETS BINDING DIINISIALISASI DULU
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ JALANKAN APLIKASI
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _isInitialized = false;
+  bool _isLoggedIn = false;
+  String _username = "User";
+  bool _supabaseConnected = false; // ✅ RENAME THIS
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      // ✅ LOAD USER PREFERENCES
+      final prefs = await SharedPreferences.getInstance();
+      final loggedIn = prefs.getBool('isLoggedIn') ?? false;
+      final username = prefs.getString('username') ?? 'User';
+
+      // ✅ INISIALISASI SUPABASE CONNECTION
+      print('🔄 Initializing Supabase connection...');
+      try {
+        await SupabaseService.initialize();
+        _supabaseConnected = true; // ✅ RENAME THIS
+        print('✅ Supabase backend connected successfully');
+      } catch (e) {
+        _supabaseConnected = false;
+        print('⚠️ Supabase connection failed: $e');
+        print('💡 Make sure:');
+        print('   1. You have Supabase project created');
+        print('   2. Anon key and URL are correct');
+        print('   3. Table "products" exists in Supabase');
+      }
+
+      setState(() {
+        _isLoggedIn = loggedIn;
+        _username = username;
+        _isInitialized = true;
+      });
+
+      print('✅ App initialized successfully');
+      print('   - Logged in: $_isLoggedIn');
+      print('   - User: $_username');
+      print('   - Supabase Connected: $_supabaseConnected'); // ✅ RENAME THIS
+    } catch (e) {
+      print('❌ App initialization error: $e');
+      setState(() {
+        _isLoggedIn = false;
+        _isInitialized = true;
+        _supabaseConnected = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+    if (!_isInitialized) {
+      return _buildLoadingScreen();
+    }
+
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => ThemeProvider()),
+        ChangeNotifierProvider(create: (context) => LocationProvider()),
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'Shopping List App',
+            theme: _buildLightTheme(),
+            darkTheme: _buildDarkTheme(),
+            themeMode: themeProvider.themeMode,
+            home: _isLoggedIn
+                ? HomePage(
+                    username: _username,
+                    mysqlConnected:
+                        _supabaseConnected, // ✅ UPDATE PARAM NAME LATER
+                  )
+                : const LoginScreen(),
+          );
+        },
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    );
+  }
+
+  // ✅ LOADING SCREEN (sama, tidak berubah)
+  Widget _buildLoadingScreen() {
+    return MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.shopping_cart,
+                  size: 40,
+                  color: Colors.redAccent,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Loading Shopping App...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Initializing database connection...',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Theme methods (sama, tidak berubah)
+  ThemeData _buildLightTheme() {
+    return ThemeData(
+      brightness: Brightness.light,
+      primaryColor: Colors.redAccent,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.redAccent,
+        primary: Colors.redAccent,
+        brightness: Brightness.light,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.redAccent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: Colors.redAccent,
+        foregroundColor: Colors.white,
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        selectedItemColor: Colors.redAccent,
+        unselectedItemColor: Colors.grey,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: MaterialStateProperty.all(Colors.redAccent),
+        trackColor:
+            MaterialStateProperty.all(Colors.redAccent.withOpacity(0.5)),
+      ),
+      useMaterial3: true,
+    );
+  }
+
+  ThemeData _buildDarkTheme() {
+    return ThemeData(
+      brightness: Brightness.dark,
+      primaryColor: Colors.redAccent,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.redAccent,
+        primary: Colors.redAccent,
+        brightness: Brightness.dark,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.redAccent,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: Colors.redAccent,
+        foregroundColor: Colors.white,
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        selectedItemColor: Colors.redAccent,
+        unselectedItemColor: Colors.grey,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: MaterialStateProperty.all(Colors.redAccent),
+        trackColor:
+            MaterialStateProperty.all(Colors.redAccent.withOpacity(0.5)),
+      ),
+      useMaterial3: true,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+// ✅ HOMEPAGE WIDGET YANG DIUPDATE
+class HomePage extends StatefulWidget {
+  final String username;
+  final bool mysqlConnected; // ✅ RENAME PARAMETER LATER
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+  const HomePage({
+    super.key,
+    required this.username,
+    required this.mysqlConnected,
+  });
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _HomePageState extends State<HomePage> {
+  int _currentIndex = 0;
+  late final List<Widget> _screens;
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      HomeScreen(
+          mysqlConnected: widget.mysqlConnected), // ✅ UPDATE SCREEN LATER
+      ProfileScreen(username: widget.username),
+    ];
+    print('✅ HomePage initialized for user: ${widget.username}');
+    print(
+        '   - Supabase Connection: ${widget.mysqlConnected}'); // ✅ RENAME LATER
+
+    // ✅ TAMPILKAN WARNING JIKA SUPABASE TIDAK TERKONEKSI
+    if (!widget.mysqlConnected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showConnectionWarning();
+      });
+    }
+
+    // ✅ TAMPILKAN INFO CACHE
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showCacheWarning();
+    });
+  }
+
+  void _showConnectionWarning() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Connection Warning'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Supabase database is not connected.'),
+            SizedBox(height: 8),
+            Text('Please check:'),
+            Text('• Internet connection'),
+            Text('• Supabase project URL and key'),
+            Text('• Table "products" exists in Supabase'),
+            SizedBox(height: 8),
+            Text('App will use local storage instead.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // _showCacheWarning() dan method lainnya tetap sama...
+  void _showCacheWarning() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.cached, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Cache Feature Enabled'),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('This app now includes cache functionality:'),
+              SizedBox(height: 8),
+              Text('• Data is cached when server is unavailable'),
+              Text('• Cache indicator shows when using cached data'),
+              Text('• You can clear cache from the home screen'),
+              SizedBox(height: 8),
+              Text(
+                'Cache ensures app works offline and improves performance.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Got It'),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  void _onTabTapped(int index) {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _currentIndex = index;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      body: _screens[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: _onTabTapped,
+        selectedItemColor: Colors.redAccent,
+        unselectedItemColor: Colors.grey,
+        showUnselectedLabels: true,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outlined),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
   }
