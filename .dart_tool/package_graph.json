@@ -1,10 +1,10 @@
 {
   "roots": [
-    "shopping_list_app"
+    "shopping_list_asses2"
   ],
   "packages": [
     {
-      "name": "shopping_list_app",
+      "name": "shopping_list_asses2",
       "version": "1.0.0+1",
       "dependencies": [
         "cupertino_icons",
