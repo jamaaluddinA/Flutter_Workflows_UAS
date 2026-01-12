@@ -1,31 +1,31 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
-  errors:
-    uri_does_not_exist: error
-    depend_on_referenced_packages: error
-    
   exclude:
     - '**/*.g.dart'
     - '**/*.freezed.dart'
-    - 'test/**'  # EXCLUDE TEST FOLDER DARI ANALYSIS
+    - 'test/**'
 
   errors:
-    # Only show these as errors, downgrade everything else
+    # Critical errors (will fail CI)
+    uri_does_not_exist: error
+    depend_on_referenced_packages: error
     missing_required_param: error
     missing_return: error
     null_check_on_nullable_type_parameter: error
     dead_code: error
-     # Downgrade semua linter rules ke warning atau info
+    undefined_identifier: error
+    
+    # Downgrade linter rules to info/warning (won't fail CI)
     avoid_print: info
     prefer_final_locals: info
     prefer_const_constructors: info
     deprecated_member_use: info
     unnecessary_type_check: info
-    undefined_identifier: error  # Tapi kita akan perbaiki test file 
+
 linter:
   rules:
-    # DISABLE SEMUA RULES YANG MENYEBABKAN ERROR
+    # DISABLE semua rules yang menyebabkan error di CI
     avoid_print: false
     prefer_final_locals: false
     prefer_const_constructors: false
@@ -34,3 +34,7 @@ linter:
     only_throw_errors: false
     use_rethrow_when_possible: false
     depend_on_referenced_packages: false
+    
+    # Bisa tambahkan rules penting yang aman
+    prefer_is_empty: true
+    prefer_is_not_empty: true
